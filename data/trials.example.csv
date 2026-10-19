@@ -1,3 +1,3 @@
-trial_id,split,label,prefix,raw_path
-water_trial_001,train,0,00000000,water/event1.raw
-water_trial_002,test,0,00000001,water/event2.raw
+trial_id,split,label,prefix,raw_path,video_path
+water_trial_001,train,0,00000000,water/event1.raw,water/rgb1.avi
+water_trial_002,test,0,00000001,water/event2.raw,water/rgb2.avi

@@ -12,6 +12,7 @@ from nlidnet.data.representations import (
     frame_sequence,
 )
 from nlidnet.data.indexing import index_raw, index_processed
+from nlidnet.protocol import STAGES, read_manifest
 
 
 class PreprocessingTests(unittest.TestCase):
@@ -97,6 +98,97 @@ class PreprocessingTests(unittest.TestCase):
             exact = index_raw(root, root / "exact.csv", split_file=split_file)
             self.assertEqual(exact[2]["split"], "test")
             self.assertEqual(exact[2]["prefix"], "00000002")
+
+    def test_rgb_pairing_uses_recording_number_and_shared_split(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "water").mkdir()
+            for number in (1, 2, 10):
+                (root / "water" / f"event{number}.raw").touch()
+            for number in (1, 10):
+                (root / "water" / f"rgb{number}.avi").touch()
+            split = root / "splits.csv"
+            split.write_text(
+                "raw_path,split,trial_id,prefix\n"
+                "water/event1.raw,train,trial_a,00000099\n"
+                "water/event2.raw,train,trial_b,00000098\n"
+                "water/event10.raw,test,trial_c,00000097\n",
+                encoding="utf-8",
+            )
+            manifest = root / "trials.csv"
+            index_raw(root, manifest, split_file=split)
+            rows = read_manifest(manifest)
+            self.assertEqual(
+                [row.get("video_path") for row in rows],
+                ["water/rgb1.avi", "", "water/rgb10.avi"],
+            )
+            self.assertEqual([row["split"] for row in rows], ["train", "train", "test"])
+            self.assertEqual(rows[2]["trial_id"], "trial_c")
+            self.assertEqual(rows[2]["prefix"], "00000097")
+
+    def test_file_catalogue_is_not_a_split_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            catalogue = root / "metadata.csv"
+            catalogue.write_text(
+                "file_name,category,sensor\nwater/event1.raw,water,event\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "raw_path and split"):
+                index_raw(root, root / "trials.csv", split_file=catalogue)
+
+    def test_prepared_stage_windows_share_origin_and_trial_split(self):
+        from nlidnet.data.dataset import LiquidEventDataset
+        from nlidnet.data.preprocessing import preprocess
+
+        origin = 10**12
+        times = [
+            0,
+            5_899_999,
+            5_900_000,
+            7_299_999,
+            7_300_000,
+            8_699_999,
+            8_700_000,
+            10_099_999,
+            10_100_000,
+        ]
+        events = np.array(
+            [[550, 400, origin + time, index % 2] for index, time in enumerate(times)],
+            dtype=np.int64,
+        )
+        events[0, :2] = 0
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            np.savez(root / "recording.npz", events=events)
+            manifest = root / "trials.csv"
+            manifest.write_text(
+                "trial_id,split,label,prefix,raw_path\n"
+                "recorded_trial,test,0,original,recording.npz\n",
+                encoding="utf-8",
+            )
+            prepared = root / "processed"
+            preprocess(manifest, root, prepared)
+            cfg = dict(
+                event_root=str(prepared),
+                roi_root=str(prepared),
+                manifest=str(manifest),
+                window_bins=700,
+                delta_t_us=2000,
+                max_events=100,
+                train_offset_count=1,
+            )
+            for start in STAGES.values():
+                sample = LiquidEventDataset(
+                    {**cfg, "start_frame": start}, "test", offset=0
+                )[0]
+                self.assertEqual(sample["trial_id"], "recorded_trial")
+                self.assertEqual(tuple(sample["signal"].shape), (6, 700))
+                self.assertEqual(sample["signal"][0, 0].item(), 1)
+                np.testing.assert_array_equal(
+                    sample["events"][:, 2].numpy(), [0, 1_399_999]
+                )
+            self.assertFalse((prepared / "train").exists())
 
 
 if __name__ == "__main__":

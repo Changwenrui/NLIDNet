@@ -37,7 +37,10 @@ def index_raw(raw_root, output, split_file=None, test_per_class=None, folder_map
     explicit = None
     if split_file is not None:
         with Path(split_file).open(encoding="utf-8-sig", newline="") as stream:
-            split_rows = list(csv.DictReader(stream))
+            reader = csv.DictReader(stream)
+            if not {"raw_path", "split"}.issubset(reader.fieldnames or []):
+                raise ValueError("Split file requires columns raw_path and split")
+            split_rows = list(reader)
         explicit = {}
         for row in split_rows:
             name = Path(row["raw_path"]).as_posix()
@@ -67,16 +70,20 @@ def index_raw(raw_root, output, split_file=None, test_per_class=None, folder_map
             else:
                 split = "test" if rank < test_per_class else "train"
                 trial_id = prefix = f"{liquid}_{path.stem}"
-            rows.append(
-                dict(
-                    trial_id=trial_id,
-                    split=split,
-                    label=label,
-                    prefix=prefix,
-                    raw_path=raw_path,
-                    liquid=liquid,
-                )
+            row = dict(
+                trial_id=trial_id,
+                split=split,
+                label=label,
+                prefix=prefix,
+                raw_path=raw_path,
+                liquid=liquid,
             )
+            match = re.fullmatch(r"event(\d+)", path.stem)
+            if match:
+                video = path.with_name(f"rgb{match.group(1)}.avi")
+                if video.is_file():
+                    row["video_path"] = video.relative_to(root).as_posix()
+            rows.append(row)
     if explicit is not None and used != set(explicit):
         raise ValueError(
             f"Split file references missing recordings: {sorted(set(explicit) - used)[:10]}"

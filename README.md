@@ -36,7 +36,11 @@ The mechanisms are implemented in [time_attention.py](nlidnet/models/time_attent
 
 **[Access the NLID dataset on Hugging Face →](https://huggingface.co/datasets/GWDx/NLID)**
 
-This work builds on our [NLID project](https://github.com/wyl-OvO/NLID), sharing its robotic pouring platform and event/RGB recordings. The experiments study the following tasks:
+This work builds on our [NLID project](https://github.com/wyl-OvO/NLID), sharing its robotic pouring platform and event/RGB recordings.
+
+Hugging Face hosts the original event-camera `.raw` recordings and RGB `.avi` videos, organized by liquid. Stage windows and model inputs are derived locally after downloading; training/test assignments are made by physical trial before temporal slicing.
+
+The experiments study the following tasks:
 
 | Task | Protocol |
 | --- | --- |
@@ -44,7 +48,7 @@ This work builds on our [NLID project](https://github.com/wyl-OvO/NLID), sharing
 | Few-shot recognition | Nine categories excluded from source-task training |
 | Concentration estimation | Water and ten ethanol concentrations, 0-100% in 10% increments |
 
-Each trial contains three 1.4 s observation windows, beginning at 5.90, 7.30 and 8.70 s, with 2 ms event bins. Predictions and few-shot support counts are defined by independent physical trials. Temporal views of a recording retain the same trial identifier.
+For the event stream, three 1.4 s observation windows begin at 5.90, 7.30 and 8.70 s relative to its first event, with 2 ms event bins. Predictions and few-shot support counts are defined by independent physical trials. Temporal views of a recording retain the same trial identifier.
 
 <details>
 <summary>Event and RGB observations of four liquids</summary>
@@ -83,7 +87,6 @@ NLIDNet/
   data/              Manifest examples, labels and reference annotations
   hardware/          Camera interfaces and robot program
   assets/            Article figures and demonstration videos
-  tests/             Functional checks
 ```
 
 | Workflow | Command | Implementation |

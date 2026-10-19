@@ -16,15 +16,18 @@ Event/video baselines and RGB controls use the optional dependencies:
 pip install -e ".[baselines]"
 ```
 
-Decoding Prophesee `.raw` files requires the Metavision SDK. NPY, NPZ and safetensors event arrays can be read without the camera SDK.
+The [Hugging Face archive](https://huggingface.co/datasets/GWDx/NLID/tree/main) contains original recordings, not preprocessed training tensors or stage clips. Retain its liquid-folder layout under `data/raw/`:
 
-For existing processed data, index the paired files directly:
-
-```bash
-python -m nlidnet data index-processed --event-root data/processed --output data/trials.csv
+```text
+data/raw/water/event1.raw
+data/raw/water/rgb1.avi
+data/raw/ethanol_20/event1.raw
+data/raw/ethanol_20/rgb1.avi
 ```
 
-For raw recordings, provide the recorded split assignments (`raw_path,split`, with optional `trial_id,prefix`) and convert them:
+`eventN.raw` is the event stream; `rgbN.avi` is the corresponding RGB recording from that trial. The event model uses the RAW stream. RGB baselines and appearance controls read AVI videos directly. Decoding Prophesee `.raw` files requires the Metavision SDK; NPY, NPZ and safetensors event arrays can be read without the camera SDK.
+
+First index independent trials, using recorded split assignments (`raw_path,split`, with optional `trial_id,prefix`). The archive's `metadata.csv` lists `file_name,category,sensor` and is not a training/test split file. Then decode the event streams and produce the model inputs:
 
 ```bash
 python -m nlidnet data index-raw --raw-root data/raw --split-file data/splits.csv --output data/trials.csv
@@ -33,7 +36,9 @@ python -m nlidnet data prepare --raw-root data/raw --manifest data/trials.csv --
 
 If preparing a new dataset, `index-raw --test-per-class 10` creates a new split from naturally sorted filenames. It does not recover the manuscript's original split. `--folder-map` accepts a JSON mapping from canonical liquid names to source folder names.
 
-Each trial produces:
+When `rgbN.avi` is present beside `eventN.raw`, `index-raw` adds its relative `video_path` to the same trial manifest. Event and RGB workflows therefore share trial identifiers and split assignments. The label map covers the 30 liquid conditions used in this work; the archive's additional `medical_alcohol_75v` category is outside this protocol.
+
+Each decoded event trial produces:
 
 ```text
 data/processed/train/<prefix>.pt             Six ROI signals, [6,9000]
@@ -43,9 +48,19 @@ data/processed/train/<prefix>.txt            Raw liquid label
 
 Test trials use `test/`. The trial schema is shown in [data/trials.example.csv](../data/trials.example.csv). Existing processed indices preserve filenames; their generated trial IDs are `split_prefix`. Use the recorded physical trial IDs in an existing manifest when available.
 
+The `.safetensors` file retains the original integer `x,y,t,p` events. The `.pt` file stores six ROI count signals in 9000 bins of 2 ms, starting at the recording's first event. The training loader slices a 700-bin stage window at bin 2950, 3650 or 4350, with the configured temporal offset. All windows and offsets from one physical trial remain in that trial's split. Event-baseline representations use the same stage boundaries when exported with `data represent`.
+
+For an existing processed dataset, indexing is available without decoding RAW again:
+
+```bash
+python -m nlidnet data index-processed --event-root data/processed --output data/trials.csv
+```
+
+Choose either `index-raw` or `index-processed` for the output manifest; commands refuse to overwrite an existing file. `index-processed` reconstructs event-tensor pairings only. Preserve the original raw manifest when using its RGB paths or recorded trial IDs.
+
 ```bash
 python -m nlidnet data validate
-python -m nlidnet data preview --events data/processed/test/00000001.safetensors
+python -m nlidnet data preview --events data/processed/test/water_event1.safetensors
 python -m nlidnet data represent --manifest data/trials.csv --event-root data/processed --representation time_surface
 ```
 
@@ -88,8 +103,10 @@ Spatial-compression baselines from NLID include ConvTran, Transformer and Incept
 ```bash
 python -m nlidnet baselines control --kind temporal --model inception_time --stage stage1
 python -m nlidnet baselines control --kind temporal --model convtran --task regression --stage stage2
-python -m nlidnet baselines control --kind rgb --manifest data/rgb_trials.csv --video-root data/rgb --frame-mode first_frame --initialization checkpoints/resnet34_imagenet1k_v1.pth --freeze-backbone
+python -m nlidnet baselines control --kind rgb --manifest data/trials.csv --video-root data/raw --frame-mode first_frame --initialization checkpoints/resnet34_imagenet1k_v1.pth --freeze-backbone
 ```
+
+Video baselines also use the raw trial manifest and AVI paths, for example `python -m nlidnet baselines train --model videomae_v2 --stage stage1 --manifest data/trials.csv --data-root data/raw`. Stage frames are sampled by the video loader; there is no need to export separate AVI clips.
 
 ## Visualization and representation analysis
 
