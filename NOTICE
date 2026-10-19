@@ -22,7 +22,6 @@ assets/acquisition_platform.png: NLID/image/Readme/1750775356233.png.
 assets/event_rgb_comparison.png: NLID/image/Readme/1750405785274.png.
 assets/pouring_sequence.png: NLID/image/Readme/1750408970516.png.
 assets/platform_dimensions.png: NLID/image/Readme/1750408564541.png.
-assets/event_representations.png: NLID/image/Readme/1750831165216.png.
 assets/demos/event_pouring.mp4: local event_frames/frame_02500.png through
 frame_05990.png, cropped to the pouring region and rendered
 at 50 frames/s with one 2 ms snapshot every 20 ms of recording time.
@@ -40,14 +39,3 @@ The UR5e program retains its DH-Robotics URCap source declarations.
 The README uses a GitHub-hosted copy of the event-pouring demonstration:
 event_pouring.mp4:
 https://github.com/user-attachments/assets/35b29a13-9c93-4753-ab63-834f00020acd
-assets/visualizations/temporal_attention.png is rendered from
-source temporal_fusion.npz caches for water trial 00000000 in
-all three stages of gradcam_offline_cache. Local softmax consistency
-is checked before rendering.
-assets/visualizations/spatial_gradcam.png is rendered from
-main-model layer1 caches in gradcam_clean_data_layer1/stage2_3650,
-water 00000000 and DMSO 00000060. Maps are recomputed from the saved
-activations and gradients; display normalization is per frame.
-assets/visualizations/liquid_embeddings.png is rendered from
-embedding_vis_stage1_phys_supcon/main16_plus_fewshot9_test_features.csv
-using standardized features and t-SNE (perplexity 30, seed 42).

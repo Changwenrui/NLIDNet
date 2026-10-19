@@ -7,6 +7,8 @@ from sklearn.preprocessing import StandardScaler
 from nlidnet.data.dataset import LiquidEventDataset, collate_trials
 from nlidnet.protocol import BASE_LABELS, NOVEL_LABELS, support_indices
 from nlidnet.utils import aggregate_trials, metrics, save_json
+import argparse
+from nlidnet.config import load_config
 
 
 def event_statistics(events, mask, delta_t_us=2000, bins=700):
@@ -70,7 +72,7 @@ def classify(cfg, output, shots=None, seed=1):
                 )
                 targets.append(int(batch["labels"][0]))
                 ids.extend(batch["trial_ids"])
-        return np.asarray(features), np.asarray(targets), ids
+        return (np.asarray(features), np.asarray(targets), ids)
 
     x, y, _ = collect("train", train.records)
     if len(set(y)) < 2:
@@ -86,3 +88,30 @@ def classify(cfg, output, shots=None, seed=1):
     result = metrics(values, y)
     save_json(output, result)
     return result
+
+
+def add_config(parser):
+    parser.add_argument("--config", default="configs/paper.yaml")
+    parser.add_argument("--stage", choices=["stage1", "stage2", "stage3"])
+    parser.add_argument("--device")
+    return parser
+
+
+def configuration(args):
+    cfg = load_config(args.config, args.stage)
+    if args.device:
+        cfg["device"] = args.device
+    return cfg
+
+
+def main(argv=None):
+    p = add_config(argparse.ArgumentParser())
+    p.add_argument("--shots", type=int, choices=[1, 5, 10, 20])
+    p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--output", default="outputs/event_statistics.json")
+    args = p.parse_args(argv)
+    classify(configuration(args), args.output, args.shots, args.seed)
+
+
+if __name__ == "__main__":
+    main()

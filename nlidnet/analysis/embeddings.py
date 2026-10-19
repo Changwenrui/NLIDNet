@@ -3,6 +3,7 @@ from sklearn.metrics import silhouette_score
 from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
 from nlidnet.analysis.features import load_features
 from nlidnet.utils import save_json
+import argparse
 
 
 def l2_normalize(x, eps=1e-12):
@@ -98,3 +99,16 @@ def analyze(path, output, reference=None):
         result["reference_classes"] = classes
     save_json(output, result)
     return result
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser()
+    p.add_argument("--features", required=True)
+    p.add_argument("--reference-features")
+    p.add_argument("--output", default="outputs/embedding_quality.json")
+    args = p.parse_args(argv)
+    analyze(args.features, args.output, args.reference_features)
+
+
+if __name__ == "__main__":
+    main()

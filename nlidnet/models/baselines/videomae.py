@@ -308,7 +308,6 @@ class PatchEmbed(nn.Module):
         return x
 
 
-# https://github.com/jadore801120/attention-is-all-you-need-pytorch/blob/master/transformer/Models.py#L31
 def get_sinusoid_encoding_table(n_position, d_hid):
 
     def get_position_angle_vec(position):

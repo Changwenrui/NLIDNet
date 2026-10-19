@@ -3,10 +3,12 @@ import numpy as np
 import torch
 from safetensors.torch import load_file
 from nlidnet.models.optical_flow import EVFlowNet
+import argparse
+from nlidnet.config import load_config
 
-ROI_X_MIN, ROI_X_MAX = 520, 840
-ROI_Y_MIN, ROI_Y_MAX = 0, 600
-ROI_W, ROI_H = 320, 600
+ROI_X_MIN, ROI_X_MAX = (520, 840)
+ROI_Y_MIN, ROI_Y_MAX = (0, 600)
+ROI_W, ROI_H = (320, 600)
 DELTA_T_US = 2000
 
 
@@ -106,9 +108,7 @@ def export_flow(
         for index in chosen:
             voxel, _ = build_input(events, t0, index, device)
             height, width = voxel.shape[-2:]
-            padded = torch.nn.functional.pad(
-                voxel, (0, (-width) % 16, 0, (-height) % 16)
-            )
+            padded = torch.nn.functional.pad(voxel, (0, -width % 16, 0, -height % 16))
             flows.append(model(padded)[0, :, :height, :width].cpu())
             maps.append(voxel[0, :2].sum(0).cpu())
     out = Path(output)
@@ -154,8 +154,8 @@ def export_flow_cache(
         min(720, y1 + context_px),
     )
     ix0, iy0, ix1, iy1 = inference_roi
-    height, width = y1 - y0, x1 - x0
-    crop_y, crop_x = y0 - iy0, x0 - ix0
+    height, width = (y1 - y0, x1 - x0)
+    crop_y, crop_x = (y0 - iy0, x0 - ix0)
     model = EVFlowNet()
     state = torch.load(checkpoint, map_location="cpu", weights_only=True)
     model.load_state_dict(state.get("model", state), strict=True)
@@ -164,8 +164,10 @@ def export_flow_cache(
     for stage, start_bin in stages.items():
         dest = out / f"{stage}_{start_bin}"
         if any(
-            (dest / name).exists()
-            for name in ("event_count.npy", "flow_uv.npy", "meta.json")
+            (
+                (dest / name).exists()
+                for name in ("event_count.npy", "flow_uv.npy", "meta.json")
+            )
         ):
             raise FileExistsError(dest)
     for stage, start_bin in stages.items():
@@ -218,8 +220,8 @@ def export_flow_cache(
         meta = {
             "stage": stage,
             "start_frame": start_bin,
-            "start_sec_relative_to_recording_t0": start_bin * delta_t_us / 1e6,
-            "duration_sec": window_bins * delta_t_us / 1e6,
+            "start_sec_relative_to_recording_t0": start_bin * delta_t_us / 1000000.0,
+            "duration_sec": window_bins * delta_t_us / 1000000.0,
             "delta_ms": delta_t_us / 1000,
             "num_bins": window_bins,
             "target_roi": {
@@ -241,3 +243,69 @@ def export_flow_cache(
         (dest / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
         print(stage, dest, flush=True)
     return out
+
+
+def add_config(parser):
+    parser.add_argument("--config", default="configs/paper.yaml")
+    parser.add_argument("--stage", choices=["stage1", "stage2", "stage3"])
+    parser.add_argument("--device")
+    return parser
+
+
+def configuration(args):
+    cfg = load_config(args.config, args.stage)
+    if args.device:
+        cfg["device"] = args.device
+    return cfg
+
+
+def main(argv=None):
+    p = add_config(argparse.ArgumentParser())
+    p.add_argument("--events", required=True)
+    p.add_argument("--checkpoint")
+    p.add_argument("--frames", type=int, default=20)
+    p.add_argument(
+        "--selection", choices=["uniform", "segment_peak"], default="segment_peak"
+    )
+    p.add_argument("--output", default="outputs/optical_flow")
+    p.add_argument(
+        "--dense",
+        action="store_true",
+        help="Export paired event_count.npy and flow_uv.npy for video rendering",
+    )
+    p.add_argument("--all-stages", action="store_true")
+    p.add_argument("--context-px", type=int, default=64)
+    p.add_argument("--batch-size", type=int, default=4)
+    args = p.parse_args(argv)
+    cfg = configuration(args)
+    if args.all_stages and (not args.dense):
+        p.error("--all-stages requires --dense")
+    if args.dense:
+        from nlidnet.protocol import STAGES
+
+        stages = STAGES if args.all_stages else {cfg["stage"]: cfg["start_frame"]}
+        return export_flow_cache(
+            args.events,
+            args.checkpoint or cfg["flow_checkpoint"],
+            args.output,
+            stages,
+            cfg["window_bins"],
+            cfg["delta_t_us"],
+            args.context_px,
+            args.batch_size,
+            cfg["device"],
+        )
+    export_flow(
+        args.events,
+        args.checkpoint or cfg["flow_checkpoint"],
+        args.output,
+        cfg["start_frame"],
+        cfg["start_frame"] + cfg["window_bins"],
+        args.frames,
+        args.selection,
+        cfg["device"],
+    )
+
+
+if __name__ == "__main__":
+    main()

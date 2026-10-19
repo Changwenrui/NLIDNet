@@ -7,6 +7,8 @@ import torch
 from torch.utils.data import DataLoader
 from nlidnet.data.dataset import LiquidEventDataset, collate_trials
 from nlidnet.utils import build_model, move_inputs, save_json
+import argparse
+from nlidnet.config import load_config
 
 
 def benchmark(
@@ -57,7 +59,7 @@ def benchmark(
                     }
                 )
     times = np.asarray([r["milliseconds"] for r in rows])
-    views = sum(r["views"] for r in rows)
+    views = sum((r["views"] for r in rows))
     result = {
         "device": str(device),
         "precision": precision,
@@ -77,3 +79,41 @@ def benchmark(
         w.writeheader()
         w.writerows(rows)
     return result
+
+
+def add_config(parser):
+    parser.add_argument("--config", default="configs/paper.yaml")
+    parser.add_argument("--stage", choices=["stage1", "stage2", "stage3"])
+    parser.add_argument("--device")
+    return parser
+
+
+def configuration(args):
+    cfg = load_config(args.config, args.stage)
+    if args.device:
+        cfg["device"] = args.device
+    return cfg
+
+
+def main(argv=None):
+    p = add_config(argparse.ArgumentParser())
+    p.add_argument("--checkpoint", required=True)
+    p.add_argument("--batch-size", type=int, default=1)
+    p.add_argument("--batches", type=int, default=50)
+    p.add_argument("--warmup", type=int, default=5)
+    p.add_argument("--precision", choices=["float32", "bfloat16"], default="float32")
+    p.add_argument("--output", default="outputs/inference_speed")
+    args = p.parse_args(argv)
+    benchmark(
+        configuration(args),
+        args.checkpoint,
+        args.output,
+        args.batches,
+        args.warmup,
+        args.batch_size,
+        args.precision,
+    )
+
+
+if __name__ == "__main__":
+    main()

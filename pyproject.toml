@@ -16,9 +16,6 @@ dev = ["build>=1"]
 baselines = ["timm>=0.9", "opencv-python>=4.10", "spikingjelly>=0.0.0.0.14"]
 media = ["pillow>=10", "imageio-ffmpeg>=0.5"]
 
-[project.scripts]
-nlidnet = "nlidnet.cli:main"
-
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["nlidnet*"]

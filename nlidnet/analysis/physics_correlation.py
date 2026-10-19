@@ -9,6 +9,7 @@ from sklearn.preprocessing import StandardScaler
 from nlidnet.analysis.features import combine_features
 from nlidnet.data.physics import PHYS_RAW
 from nlidnet.utils import save_json
+import argparse
 
 PROPERTY_NAMES = ["Density", "Viscosity", "Surface tension"]
 PHYSICS_LABELS = tuple(range(12)) + tuple(range(21, 30))
@@ -182,3 +183,30 @@ def analyze(event_paths, rgb_paths, output, n_pc=3, n_perm=5000, n_boot=2000, se
         np.save(out / "difference_permutation.npy", null)
     save_json(out / "correlation.json", summary)
     return summary
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser()
+    p.add_argument("--event-features", nargs="+", required=True)
+    p.add_argument("--rgb-features", nargs="+", required=True)
+    p.add_argument("--components", type=int, default=3)
+    p.add_argument("--permutations", type=int, default=5000)
+    p.add_argument("--bootstraps", type=int, default=2000)
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--output", default="outputs/physics_correlation")
+    args = p.parse_args(argv)
+    if min(args.permutations, args.bootstraps) < 0 or args.components < 1:
+        p.error("Invalid analysis budget")
+    analyze(
+        args.event_features,
+        args.rgb_features,
+        args.output,
+        args.components,
+        args.permutations,
+        args.bootstraps,
+        args.seed,
+    )
+
+
+if __name__ == "__main__":
+    main()

@@ -8,7 +8,7 @@ University of Science and Technology of China &nbsp; | &nbsp; † Equal contribu
 
 **[Hugging Face Dataset](https://huggingface.co/datasets/GWDx/NLID)** &nbsp; | &nbsp; [Video](#video) &nbsp; | &nbsp; [Method](#method) &nbsp; | &nbsp; [Code](#code) &nbsp; | &nbsp; [Hardware](hardware/README.md) &nbsp; | &nbsp; [Citation](#citation)
 
-**A robot can learn about a liquid by eliciting and observing its motion.** A repeatable pouring action reveals transient differences in jet formation, impact, entrainment and breakup that are difficult to see in static appearance. Event-based vision captures these dynamics, and NLIDNet learns a shared representation for liquid recognition, few-shot adaptation and concentration estimation.
+**A prescribed robotic pouring action elicits the transient response used for liquid sensing.** Event-based vision records the non-equilibrium evolution of the jet, impact region and free surface. NLIDNet selects informative intervals and encodes the response into a protocol-conditioned representation for liquid recognition, few-shot adaptation and ethanol concentration regression.
 
 ![Active hydrodynamic interrogation: robotic pouring, event-based observation and liquid sensing](assets/overview.png)
 
@@ -24,9 +24,11 @@ https://github.com/user-attachments/assets/35b29a13-9c93-4753-ab63-834f00020acd
 
 NLIDNet follows the liquid response through three complementary mechanisms:
 
-- **Temporal selection.** Six regional event-count signals guide a ConvTran encoder. Attention is normalized within short temporal segments to select informative intervals.
+- **Temporal selection.** A ConvTran encoder predicts temporal importance from six regional event-count signals. These weights guide event accumulation and the selection of informative flow moments.
 - **Pattern and velocity encoding.** Attentive polarity maps describe the evolving interfaces; a frozen EVFlowNet and trainable velocity encoder describe their motion. The two branches form a 256-dimensional response embedding.
 - **Representation learning and transfer.** Category supervision, supervised contrastive learning, attention variance regularization and auxiliary physical-attribute supervision shape the embedding. Linear probes or full fine-tuning adapt it to downstream tasks.
+
+The experiments use a fixed pouring trajectory, vessel setup and imaging protocol. The reported setting uses the same prescribed action across liquids and trials.
 
 ![NLIDNet: temporal selection, attentive event construction and two-stream response encoding](assets/architecture.png)
 
@@ -48,7 +50,7 @@ The experiments study the following tasks:
 | Few-shot recognition | Nine categories excluded from source-task training |
 | Concentration estimation | Water and ten ethanol concentrations, 0-100% in 10% increments |
 
-For the event stream, three 1.4 s observation windows begin at 5.90, 7.30 and 8.70 s relative to its first event, with 2 ms event bins. Predictions and few-shot support counts are defined by independent physical trials. Temporal views of a recording retain the same trial identifier.
+Three pouring stages are analysed separately. Training/test splitting is performed at the independent-trial level with an 80%/20% ratio; all stages, temporal views and crops from one trial remain in the same split.
 
 <details>
 <summary>Event and RGB observations of four liquids</summary>
@@ -71,36 +73,32 @@ Camera interfaces, acquisition scripts, platform dimensions and the robot progra
 
 ## Code
 
-The `nlidnet` command connects data preparation, training, adaptation and analysis. Implementation modules are organized by function:
+The model mechanisms are implemented in `nlidnet/`. Each experimental task has its own script in `experiments/`, with its data selection, training and evaluation workflow kept together.
 
 ```text
 NLIDNet/
+  experiments/
+    train.py                    Source-task pretraining
+    evaluate.py                 Trial-level evaluation
+    few_shot_classification.py  Adaptation to nine novel liquid categories
+    concentration_regression.py Ethanol concentration adaptation
+    classification_probe.py     Classification from cached features
+    concentration_probe.py      Regression from cached features
+    baselines/                  Event, video, temporal and RGB experiments
+    ablations/                  Velocity, temporal sampling and loss ablations
   nlidnet/
-    commands/        Command-line workflows
     models/          Time attention, event construction and two-stream encoders
     data/            RAW decoding, trial indexing and representations
-    training/        Objectives, source training and adaptation
-    analysis/        Correlation, statistics, embeddings and timing
-    visualization/   Attention, Grad-CAM, galleries and video export
+    training/        Losses, support selection and feature probes
+    analysis/        Independent correlation, statistics, embedding and timing tools
+    visualization/   Attention, Grad-CAM and video rendering
+  tools/             Data preparation and visualization utilities
   configs/           Paper configuration
   docs/              Installation and workflow reference
   data/              Manifest examples, labels and reference annotations
   hardware/          Camera interfaces and robot program
-  assets/            Article figures and demonstration videos
+  assets/            Figures and video used in the documentation
 ```
-
-| Workflow | Command | Implementation |
-| --- | --- | --- |
-| RAW processing and indexing | `nlidnet data` | [data commands](nlidnet/commands/prepare_data.py) |
-| Source training | `nlidnet train` | [training](nlidnet/training/train.py) |
-| Trial-level evaluation | `nlidnet evaluate` | [evaluation](nlidnet/training/evaluate.py) |
-| Few-shot classification and concentration regression | `nlidnet adapt` | [adaptation](nlidnet/training/adapt.py), [cached probes](nlidnet/training/probes.py) |
-| Event, video, temporal and RGB controls | `nlidnet baselines` | [baseline models](nlidnet/models/baselines/) |
-| Architecture and loss ablations | `nlidnet ablations` | [ablation models](nlidnet/models/ablations.py) |
-| Representation analysis | `nlidnet analyze` | [analysis](nlidnet/analysis/) |
-| Figures and video export | `nlidnet visualize` | [visualization](nlidnet/visualization/) |
-
-`python -m nlidnet` provides the same interface. Run `nlidnet --help` or add `--help` after a command to inspect its options.
 
 [Installation, data preparation and experiment commands](docs/usage.md)
 

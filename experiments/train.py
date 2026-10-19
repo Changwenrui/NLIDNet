@@ -1,16 +1,18 @@
 import csv
 from pathlib import Path
 import torch
-from torch import nn
 from torch.utils.data import DataLoader
 from nlidnet.config import save_config
 from nlidnet.data.dataset import LiquidEventDataset, collate_trials
 from nlidnet.data.sampling import ClassBalancedBatchSampler
 from nlidnet.utils import build_model, set_seed, move_inputs
 from nlidnet.training.losses import LiquidRepresentationLoss
+import argparse
+import json
+from nlidnet.config import load_config
 
 
-def train(cfg):
+def run_experiment(cfg):
     set_seed(cfg["seed"])
     device = torch.device(cfg["device"])
     out = Path(cfg["output"]) / cfg["stage"] / "pretrain"
@@ -76,3 +78,35 @@ def train(cfg):
             out / "final.pth",
         )
     return out / "final.pth"
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Train NLIDNet on source liquid categories"
+    )
+    parser.add_argument("--config", default="configs/paper.yaml")
+    parser.add_argument("--stage", choices=["stage1", "stage2", "stage3"])
+    parser.add_argument("--device")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--epochs", type=int)
+    parser.add_argument("--learning-rate", type=float)
+    parser.add_argument("--manifest")
+    parser.add_argument("--output")
+    args = parser.parse_args(argv)
+    cfg = load_config(args.config, args.stage)
+    if args.device:
+        cfg["device"] = args.device
+    for key in ("epochs", "learning_rate", "manifest", "output"):
+        value = getattr(args, key)
+        if value is not None:
+            cfg[key] = value
+    if cfg["epochs"] < 1 or cfg["learning_rate"] <= 0:
+        parser.error("epochs and learning rate must be positive")
+    if args.dry_run:
+        print(json.dumps(cfg, indent=2))
+        return
+    return run_experiment(cfg)
+
+
+if __name__ == "__main__":
+    main()
