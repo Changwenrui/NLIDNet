@@ -7,7 +7,7 @@ from nlidnet.config import save_config
 from nlidnet.data.dataset import LiquidEventDataset, collate_trials
 from nlidnet.data.sampling import ClassBalancedBatchSampler
 from nlidnet.utils import build_model, set_seed, move_inputs
-from nlidnet.training.losses import calculate_variance_loss, supervised_contrastive_loss
+from nlidnet.training.losses import LiquidRepresentationLoss
 
 
 def train(cfg):
@@ -25,6 +25,9 @@ def train(cfg):
         ds, batch_sampler=sampler, num_workers=cfg["workers"], collate_fn=collate_trials
     )
     model = build_model(cfg).to(device)
+    criterion = LiquidRepresentationLoss(
+        cfg["T"], cfg["k"], cfg["lambda_var"], cfg["lambda_supcon"], cfg["lambda_phys"]
+    )
     optimizer = torch.optim.AdamW(
         (p for p in model.parameters() if p.requires_grad),
         lr=cfg["learning_rate"],
@@ -49,27 +52,16 @@ def train(cfg):
                     dtype=torch.bfloat16,
                     enabled=device.type == "cuda",
                 ):
-                    logits, attention, features, physical = model(
-                        *move_inputs(batch, device)
+                    terms = criterion(
+                        model(*move_inputs(batch, device)),
+                        batch["labels"].to(device),
+                        batch["physics"].to(device),
                     )
-                    ce = nn.functional.cross_entropy(logits, batch["labels"].to(device))
-                    var = calculate_variance_loss(attention, cfg["T"], cfg["k"], device)
-                    con = supervised_contrastive_loss(
-                        features, batch["labels"].to(device)
-                    )
-                    phy = nn.functional.smooth_l1_loss(
-                        physical.float(), batch["physics"].to(device), beta=0.5
-                    )
-                    loss = (
-                        ce
-                        + cfg["lambda_var"] * var
-                        + cfg["lambda_supcon"] * con
-                        + cfg["lambda_phys"] * phy
-                    )
+                    loss = terms["loss"]
                 loss.backward()
                 optimizer.step()
-                for key, value in zip(sums, [loss, ce, var, con, phy]):
-                    sums[key] += value.detach().item()
+                for key in sums:
+                    sums[key] += terms[key].detach().item()
             scheduler.step()
             row = {"epoch": epoch + 1, **{k: v / len(loader) for k, v in sums.items()}}
             writer.writerow(row)

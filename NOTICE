@@ -16,9 +16,32 @@ are shared with NLID:
 https://github.com/wyl-OvO/NLID
 
 Figure sources:
+assets/overview.png: Figure 1 of the NLIDNet manuscript.
 assets/architecture.png: Figure 2 of the NLIDNet manuscript.
 assets/acquisition_platform.png: NLID/image/Readme/1750775356233.png.
-assets/legacy_overview.png: NLID/image/Readme/1750346547321.png.
-assets/legacy_event_representations.png: NLID/image/Readme/1750831165216.png.
+assets/event_rgb_comparison.png: NLID/image/Readme/1750405785274.png.
+assets/pouring_sequence.png: NLID/image/Readme/1750408970516.png.
+assets/platform_dimensions.png: NLID/image/Readme/1750408564541.png.
+assets/event_representations.png: NLID/image/Readme/1750831165216.png.
+assets/event_pouring.gif: local event_frames/frame_02500.png through
+frame_05990.png, cropped to the pouring region; each displayed frame
+accumulates five exported event frames over 100 ms of recording time.
+
+assets/demos/event_pouring.mp4: the same local event snapshots, rendered
+at 50 frames/s with one 2 ms snapshot every 20 ms of recording time.
+assets/demos/event_flow.mp4 and assets/event_flow.gif: paired event_count.npy
+and flow_uv.npy from flow_2ms_export_ctx64/00000000 across all three stages.
+The cache uses a 64-pixel real-event context for optical-flow inference,
+then crops back to the 320 x 480 target region. The videos use a shared
+color scale across stages and 5x slower playback. These are visualization
+examples of cached solver responses.
+
+The spatial-compression baselines in nlidnet/models/baselines/temporal.py
+adapt the ConvTran and InceptionTime implementations from NLID.
+The RAW, ROI and event-representation preparation follows
+create_6roi_dataset_from_raw.py, create_data.py and NLID preprocessing.
+RGB appearance controls follow rgb_resnet34_single_frame_ablation.py and
+rgb_resnet34_firstframe_diagnostics.py. Grad-CAM export and event overlays
+follow export_gradcam_offline_cache_all.py and prepare_gradcam_data.py.
 
 The UR5e program retains its DH-Robotics URCap source declarations.

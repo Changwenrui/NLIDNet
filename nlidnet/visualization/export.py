@@ -13,6 +13,7 @@ def export_features(cfg, checkpoint, output, split="test"):
     features = []
     labels = []
     ids = []
+    offsets = []
     with torch.no_grad():
         for offset in cfg["eval_offsets"]:
             ds = LiquidEventDataset(
@@ -24,6 +25,16 @@ def export_features(cfg, checkpoint, output, split="test"):
                 features.extend(model(*move_inputs(b, cfg["device"]))[2].cpu().numpy())
                 labels.extend(b["raw_labels"].tolist())
                 ids.extend(b["trial_ids"])
+                offsets.extend([offset] * len(b["trial_ids"]))
+    out = Path(output)
+    out.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(
+        out / "views.npz",
+        features=np.asarray(features),
+        labels=np.asarray(labels),
+        trial_ids=np.asarray(ids),
+        offsets=np.asarray(offsets),
+    )
     features, labels, ids = aggregate_trials(np.asarray(features), labels, ids)
     out = Path(output)
     out.mkdir(parents=True, exist_ok=True)
@@ -48,10 +59,24 @@ def inspect_trial(cfg, checkpoint, trial_id, output, kind="attention"):
     out.mkdir(parents=True, exist_ok=True)
     if kind == "attention":
         with torch.no_grad():
-            attention = model(*inputs)[1][0].cpu().numpy()
+            selection = model.time_attention(inputs[0])
+            attention = selection.fine_weights[0].cpu().numpy()
         signal = b["inputs"][0][0].numpy()
         plot_attention(signal, attention, out / "attention.png", cfg["delta_t_us"])
-        np.savez_compressed(out / "attention.npz", signal=signal, attention=attention)
+        np.savez_compressed(
+            out / "attention.npz",
+            signal=signal,
+            attention=attention,
+            raw_logits=selection.raw_logits[0].cpu().numpy(),
+            smoothed_logits=selection.smoothed_logits[0].cpu().numpy(),
+            segment_weights=selection.segment_weights[0].cpu().numpy(),
+            key_indices=selection.key_indices[0].cpu().numpy(),
+        )
+        from nlidnet.visualization.plotting import plot_temporal_selection
+
+        plot_temporal_selection(
+            signal, selection, out / "selection.png", cfg["delta_t_us"]
+        )
     else:
         from nlidnet.visualization.gradcam import gradcam
         import matplotlib.pyplot as plt
@@ -92,17 +117,18 @@ def export_attention(cfg, checkpoint, output, split="test"):
                 )
             ):
                 inputs = move_inputs(batch, cfg["device"])
-                raw = model.temporal_encoder(inputs[0]).reshape(1, 1, -1)
-                smooth = model.gaussian_smooth(raw)
-                attention = torch.softmax(
-                    smooth.reshape(1, cfg["T"], cfg["k"]), dim=-1
-                ).reshape(-1)
+                selection = model.time_attention(inputs[0])
+                raw = selection.raw_logits
+                attention = selection.fine_weights.reshape(-1)
                 filename = f"{index:06d}.npz"
                 np.savez_compressed(
                     out / filename,
                     signal=inputs[0][0].cpu().numpy(),
                     raw_logits=raw.reshape(-1).cpu().numpy(),
                     attention=attention.cpu().numpy(),
+                    smoothed_logits=selection.smoothed_logits[0].cpu().numpy(),
+                    segment_weights=selection.segment_weights[0].cpu().numpy(),
+                    key_indices=selection.key_indices[0].cpu().numpy(),
                 )
                 writer.writerow(
                     [batch["trial_ids"][0], int(batch["raw_labels"][0]), filename]

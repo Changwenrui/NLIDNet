@@ -1,10 +1,10 @@
+from nlidnet.models.encoders import PatternEncoder, VelocityEncoder
 from nlidnet.models.checkpoints import CheckpointCompatible
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torchvision import models
-from nlidnet.models.optical_flow import EVFlowNet
-from nlidnet.models.network import GaussianSmoothing1D, NLIDNet
+from nlidnet.models.time_attention import GaussianSmoothing1D
+from nlidnet.models.event_representation import AttentiveEventRepresentation
 from nlidnet.models.temporal.encoder import TemporalEncoder
 
 
@@ -43,48 +43,10 @@ class NoFlowAblation(CheckpointCompatible):
         self.gaussian_smooth = GaussianSmoothing1D(
             channels=1, kernel_size=15, sigma=3.0
         )
-        self.event_downsampler = nn.Sequential(
-            nn.Conv2d(
-                in_channels=self.ev2d_chans,
-                out_channels=self.ev2d_chans,
-                kernel_size=3,
-                padding=1,
-                stride=2,
-            ),
-            nn.BatchNorm2d(self.ev2d_chans),
-            nn.GELU(),
-            nn.Conv2d(
-                in_channels=self.ev2d_chans,
-                out_channels=self.ev2d_chans,
-                kernel_size=3,
-                padding=1,
-                stride=2,
-            ),
-            nn.BatchNorm2d(self.ev2d_chans),
-            nn.GELU(),
-            nn.Conv2d(
-                self.ev2d_chans, self.ev2d_chans, kernel_size=3, padding=1, stride=2
-            ),
-            nn.BatchNorm2d(self.ev2d_chans),
-            nn.GELU(),
-        )
-        self.pattern_feature_dim = 512
-        resnet = models.resnet34(weights=None)
-        if resnet_checkpoint is not None:
-            resnet.load_state_dict(
-                torch.load(resnet_checkpoint, map_location="cpu", weights_only=True),
-                strict=True,
-            )
-        if ev2d_chans != 3:
-            old_conv1_weight = resnet.conv1.weight.data.clone()
-            resnet.conv1 = nn.Conv2d(
-                ev2d_chans, 64, kernel_size=7, stride=2, padding=3, bias=False
-            )
-            with torch.no_grad():
-                mean_weight = old_conv1_weight.mean(dim=1, keepdim=True)
-                resnet.conv1.weight.copy_(mean_weight.repeat(1, ev2d_chans, 1, 1))
-        resnet.fc = nn.Identity()
-        self.pattern_encoder = resnet
+        pattern = PatternEncoder(ev2d_chans, resnet_checkpoint)
+        self.event_downsampler = pattern.downsampler
+        self.pattern_encoder = pattern.backbone
+        self.pattern_feature_dim = pattern.output_dim
         self.velocity_feature_dim = 0
         self.fusion_head = nn.Sequential(
             nn.Linear(self.pattern_feature_dim, 256),
@@ -113,7 +75,7 @@ class NoFlowAblation(CheckpointCompatible):
         logits = self.fusion_head(fused_feat)
         return (logits, timeattention)
 
-    build_event_frames = NLIDNet.build_event_frames
+    build_event_frames = AttentiveEventRepresentation.build_event_frames
 
 
 class UniformTemporalAblation(CheckpointCompatible):
@@ -138,76 +100,15 @@ class UniformTemporalAblation(CheckpointCompatible):
         self.img_size = img_size
         self.delta_t = delta_t
 
-        self.event_downsampler = nn.Sequential(
-            nn.Conv2d(
-                in_channels=self.ev2d_chans,
-                out_channels=self.ev2d_chans,
-                kernel_size=3,
-                padding=1,
-                stride=2,
-            ),
-            nn.BatchNorm2d(self.ev2d_chans),
-            nn.GELU(),
-            nn.Conv2d(
-                in_channels=self.ev2d_chans,
-                out_channels=self.ev2d_chans,
-                kernel_size=3,
-                padding=1,
-                stride=2,
-            ),
-            nn.BatchNorm2d(self.ev2d_chans),
-            nn.GELU(),
-            nn.Conv2d(
-                self.ev2d_chans, self.ev2d_chans, kernel_size=3, padding=1, stride=2
-            ),
-            nn.BatchNorm2d(self.ev2d_chans),
-            nn.GELU(),
-        )
+        pattern = PatternEncoder(ev2d_chans, resnet_checkpoint)
+        self.event_downsampler = pattern.downsampler
+        self.pattern_encoder = pattern.backbone
+        self.pattern_feature_dim = pattern.output_dim
 
-        self.pattern_feature_dim = 512
-        resnet = models.resnet34(weights=None)
-
-        if resnet_checkpoint is not None:
-            resnet.load_state_dict(
-                torch.load(resnet_checkpoint, map_location="cpu", weights_only=True),
-                strict=True,
-            )
-        if ev2d_chans != 3:
-            old_conv1_weight = resnet.conv1.weight.data.clone()
-            resnet.conv1 = nn.Conv2d(
-                ev2d_chans, 64, kernel_size=7, stride=2, padding=3, bias=False
-            )
-            with torch.no_grad():
-                mean_weight = old_conv1_weight.mean(dim=1, keepdim=True)
-                resnet.conv1.weight.copy_(mean_weight.repeat(1, ev2d_chans, 1, 1))
-
-        resnet.fc = nn.Identity()
-        self.pattern_encoder = resnet
-
-        self.optical_flow = EVFlowNet()
-        if flow_checkpoint is not None:
-            self.optical_flow.load_state_dict(
-                torch.load(flow_checkpoint, map_location="cpu", weights_only=True),
-                strict=True,
-            )
-        self.optical_flow.eval()
-        for param in self.optical_flow.parameters():
-            param.requires_grad = False
-
-        self.velocity_feature_dim = 64
-        self.velocity_encoder = nn.Sequential(
-            nn.Conv2d(2, 16, kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm2d(16),
-            nn.ReLU(),
-            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool2d((1, 1)),
-            nn.Flatten(),
-        )
+        velocity = VelocityEncoder(flow_checkpoint)
+        self.optical_flow = velocity.flow_solver
+        self.velocity_encoder = velocity.features
+        self.velocity_feature_dim = velocity.output_dim
 
         self.fusion_head = nn.Sequential(
             nn.Linear(self.pattern_feature_dim + self.velocity_feature_dim, 256),

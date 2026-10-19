@@ -49,3 +49,40 @@ def plot_embeddings(features, labels, path, method="pca", seed=42):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=200)
     plt.close(fig)
+
+
+def plot_temporal_selection(signal, selection, path, delta_t_us=2000):
+    import matplotlib.pyplot as plt
+
+    def array(tensor):
+        return tensor.detach().cpu().numpy()[0]
+
+    raw, smooth = array(selection.raw_logits), array(selection.smoothed_logits)
+    attention = array(selection.fine_weights)
+    coarse, keys = array(selection.segment_weights), array(
+        selection.key_indices
+    ).astype(int)
+    time = np.arange(len(raw)) * delta_t_us / 1e6
+    fig, axes = plt.subplots(4, 1, figsize=(10, 8), sharex=True, layout="constrained")
+    for i, row in enumerate(signal):
+        axes[0].plot(time, row, linewidth=0.6, label=f"ROI {i + 1}")
+    axes[0].legend(ncol=6, frameon=False, fontsize=8)
+    axes[0].set_ylabel("Event count")
+    axes[1].plot(time, raw, linewidth=0.6, color="#a4b2bc", label="Encoder logits")
+    axes[1].plot(time, smooth, linewidth=1, color="#405b87", label="Smoothed logits")
+    axes[1].legend(frameon=False, fontsize=8)
+    axes[1].set_ylabel("Temporal score")
+    axes[2].plot(time, attention, linewidth=0.8, color="#405b87")
+    axes[2].scatter(time[keys], attention[keys], s=12, color="#a26539", zorder=3)
+    axes[2].set_ylabel("Local weight")
+    segment_width = len(raw) / len(coarse) * delta_t_us / 1e6
+    centers = (np.arange(len(coarse)) + 0.5) * segment_width
+    axes[3].bar(centers, coarse, width=segment_width * 0.85, color="#405b87")
+    axes[3].set_ylabel("Segment weight")
+    axes[3].set_xlabel("Time within stage window (s)")
+    for ax in axes:
+        for boundary in np.arange(1, len(coarse)) * segment_width:
+            ax.axvline(boundary, linewidth=0.3, color="#c9ced1", zorder=0)
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=180)
+    plt.close(fig)

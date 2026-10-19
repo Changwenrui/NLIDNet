@@ -69,6 +69,10 @@ def read_manifest(path):
         if not required.issubset(reader.fieldnames or []):
             raise ValueError(f"Manifest requires columns {sorted(required)}")
         rows = list(reader)
+    return validate_manifest_rows(rows)
+
+
+def validate_manifest_rows(rows):
     seen = set()
     for row in rows:
         if not row["trial_id"] or row["trial_id"] in seen:

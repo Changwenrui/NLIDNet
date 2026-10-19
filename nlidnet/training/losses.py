@@ -1,4 +1,5 @@
 import torch
+from torch import nn
 from torch.nn import functional as F
 
 
@@ -43,3 +44,42 @@ def supervised_contrastive_loss(
         positives_per_sample + 1e-12
     )
     return -mean_log_prob_pos[valid].mean()
+
+
+class LiquidRepresentationLoss(nn.Module):
+    def __init__(
+        self,
+        segments=20,
+        bins_per_segment=35,
+        variance_weight=0.0005,
+        contrastive_weight=0.02,
+        physics_weight=0.10,
+        temperature=0.1,
+        physics_beta=0.5,
+    ):
+        super().__init__()
+        self.segments, self.bins_per_segment = segments, bins_per_segment
+        self.variance_weight = variance_weight
+        self.contrastive_weight = contrastive_weight
+        self.physics_weight = physics_weight
+        self.temperature, self.physics_beta = temperature, physics_beta
+
+    def forward(self, outputs, labels, physics_targets):
+        logits, attention, features, physical = outputs
+        terms = {
+            "ce": F.cross_entropy(logits, labels),
+            "variance": calculate_variance_loss(
+                attention, self.segments, self.bins_per_segment, attention.device
+            ),
+            "supcon": supervised_contrastive_loss(features, labels, self.temperature),
+            "physics": F.smooth_l1_loss(
+                physical.float(), physics_targets, beta=self.physics_beta
+            ),
+        }
+        terms["loss"] = (
+            terms["ce"]
+            + self.variance_weight * terms["variance"]
+            + self.contrastive_weight * terms["supcon"]
+            + self.physics_weight * terms["physics"]
+        )
+        return terms

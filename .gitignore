@@ -17,5 +17,6 @@ data/raw/
 .env
 .DS_Store
 data/baselines/
+data/representations/
 .cache/
 .triton_cache*/

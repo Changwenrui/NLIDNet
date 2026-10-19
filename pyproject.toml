@@ -13,7 +13,8 @@ dependencies = ["numpy>=1.24", "torch>=2.1", "torchvision>=0.16", "safetensors>=
 
 [project.optional-dependencies]
 dev = ["build>=1"]
-baselines = ["timm>=0.9", "opencv-python>=4.8", "spikingjelly>=0.0.0.0.14"]
+baselines = ["timm>=0.9", "opencv-python>=4.10", "spikingjelly>=0.0.0.0.14"]
+media = ["pillow>=10", "imageio-ffmpeg>=0.5"]
 
 [project.scripts]
 nlidnet = "nlidnet.cli:main"

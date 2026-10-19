@@ -116,3 +116,128 @@ def export_flow(
     torch.save(torch.stack(flows), out / "flow.pt")
     torch.save(torch.stack(maps), out / "event_counts.pt")
     np.save(out / "selected_bins.npy", np.asarray(chosen))
+
+
+def export_flow_cache(
+    event_path,
+    checkpoint,
+    output,
+    stages=None,
+    window_bins=700,
+    delta_t_us=2000,
+    context_px=64,
+    batch_size=4,
+    device="cuda",
+    roi=(520, 100, 840, 580),
+):
+    import json
+    import math
+    from torch.nn import functional as F
+    from nlidnet.data.raw import read_events
+    from nlidnet.data.representations import flow_voxel
+    from nlidnet.protocol import STAGES
+
+    if min(window_bins, delta_t_us, batch_size) < 1 or context_px < 0:
+        raise ValueError("Invalid dense optical-flow export settings")
+    stages = stages or STAGES
+    events = read_events(event_path)
+    if not len(events):
+        raise ValueError("Cannot extract flow from an empty recording")
+    origin = int(events[0, 2])
+    x0, y0, x1, y1 = roi
+    if not (0 <= x0 < x1 <= 1280 and 0 <= y0 < y1 <= 720):
+        raise ValueError("Target ROI must lie inside the 1280x720 event sensor")
+    inference_roi = (
+        max(0, x0 - context_px),
+        max(0, y0 - context_px),
+        min(1280, x1 + context_px),
+        min(720, y1 + context_px),
+    )
+    ix0, iy0, ix1, iy1 = inference_roi
+    height, width = y1 - y0, x1 - x0
+    crop_y, crop_x = y0 - iy0, x0 - ix0
+    model = EVFlowNet()
+    state = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    model.load_state_dict(state.get("model", state), strict=True)
+    model.to(device).requires_grad_(False).eval()
+    out = Path(output)
+    for stage, start_bin in stages.items():
+        dest = out / f"{stage}_{start_bin}"
+        if any(
+            (dest / name).exists()
+            for name in ("event_count.npy", "flow_uv.npy", "meta.json")
+        ):
+            raise FileExistsError(dest)
+    for stage, start_bin in stages.items():
+        dest = out / f"{stage}_{start_bin}"
+        dest.mkdir(parents=True, exist_ok=True)
+        counts = np.lib.format.open_memmap(
+            dest / "event_count.npy",
+            mode="w+",
+            dtype=np.uint16,
+            shape=(window_bins, height, width),
+        )
+        flows = np.lib.format.open_memmap(
+            dest / "flow_uv.npy",
+            mode="w+",
+            dtype=np.float16,
+            shape=(window_bins, 2, height, width),
+        )
+        for start in range(0, window_bins, batch_size):
+            indices = list(range(start, min(start + batch_size, window_bins)))
+            voxels = []
+            for index in indices:
+                begin_us = origin + (start_bin + index) * delta_t_us
+                begin, end = np.searchsorted(
+                    events[:, 2], [begin_us, begin_us + delta_t_us]
+                )
+                voxel = flow_voxel(
+                    events[begin:end], begin_us, delta_t_us, inference_roi
+                )
+                count = voxel[
+                    :2, crop_y : crop_y + height, crop_x : crop_x + width
+                ].sum(axis=0)
+                if count.max() > np.iinfo(np.uint16).max:
+                    raise ValueError("Per-pixel event count exceeds uint16 storage")
+                counts[index] = count.astype(np.uint16)
+                voxels.append(voxel)
+            inputs = torch.from_numpy(np.stack(voxels)).to(device)
+            ih, iw = inputs.shape[-2:]
+            padded = F.pad(
+                inputs,
+                (0, math.ceil(iw / 16) * 16 - iw, 0, math.ceil(ih / 16) * 16 - ih),
+            )
+            with torch.no_grad():
+                predicted = model(padded)[
+                    :, :, crop_y : crop_y + height, crop_x : crop_x + width
+                ]
+            flows[indices] = predicted.cpu().numpy().astype(np.float16)
+        counts.flush()
+        flows.flush()
+        del counts, flows
+        meta = {
+            "stage": stage,
+            "start_frame": start_bin,
+            "start_sec_relative_to_recording_t0": start_bin * delta_t_us / 1e6,
+            "duration_sec": window_bins * delta_t_us / 1e6,
+            "delta_ms": delta_t_us / 1000,
+            "num_bins": window_bins,
+            "target_roi": {
+                "x_min": x0,
+                "y_min": y0,
+                "x_max": x1,
+                "y_max": y1,
+                "height": height,
+                "width": width,
+            },
+            "inference_context_px": context_px,
+            "inference_roi": {"x_min": ix0, "y_min": iy0, "x_max": ix1, "y_max": iy1},
+            "event_count_shape": [window_bins, height, width],
+            "flow_uv_shape": [window_bins, 2, height, width],
+            "event_count_dtype": "uint16",
+            "flow_uv_dtype": "float16",
+            "source_recording": Path(event_path).name,
+        }
+        (dest / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+        print(stage, dest, flush=True)
+    return out

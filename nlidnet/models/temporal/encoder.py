@@ -91,8 +91,4 @@ class TemporalEncoder(nn.Module):
         out = att_tok + self.FeedForward(att_tok)
         out = self.LayerNorm2(out)
         logits = self.att_proj(out).squeeze(-1)
-        G = self.seq_len // self.k
-        logits_group = logits.view(B, G, self.k)
-        att_group = F.softmax(logits_group, dim=-1)
-        att = att_group.view(B, self.seq_len)
         return logits

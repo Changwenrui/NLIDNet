@@ -1,6 +1,7 @@
 from pathlib import Path
 import numpy as np
 from nlidnet.protocol import ROI_BOXES, read_manifest
+from nlidnet.data.raw import read_events
 
 
 def roi_counts(events, delta_t_us=2000, bins=9000):
@@ -27,27 +28,24 @@ def roi_counts(events, delta_t_us=2000, bins=9000):
 
 
 def read_raw(path):
-    from metavision_core.event_io import EventsIterator
-
-    chunks = []
-    for ev in EventsIterator(input_path=str(path), delta_t=1000000):
-        if len(ev):
-            chunks.append(
-                np.column_stack([ev["x"], ev["y"], ev["t"], ev["p"]]).astype(np.int64)
-            )
-    if not chunks:
+    result = read_events(path)
+    if not len(result):
         raise ValueError(f"Empty recording: {path}")
-    result = np.concatenate(chunks)
-    if np.any(np.diff(result[:, 2]) < 0):
-        raise ValueError(f"Unsorted event timestamps: {path}")
     return result
 
 
-def preprocess(manifest, raw_root, output):
+def preprocess(
+    manifest, raw_root, output, delta_t_us=2000, bins=9000, labels=None, splits=None
+):
     import torch
     from safetensors.torch import save_file
 
-    records = read_manifest(manifest)
+    records = [
+        r
+        for r in read_manifest(manifest)
+        if (labels is None or r["label"] in labels)
+        and (splits is None or r["split"] in splits)
+    ]
     raw_paths = []
     for r in records:
         if not r.get("raw_path"):
@@ -64,7 +62,7 @@ def preprocess(manifest, raw_root, output):
         if any(p.exists() for p in targets):
             raise FileExistsError(f"Refusing to overwrite prepared trial: {dest}")
         events = read_raw(raw)
-        torch.save(torch.from_numpy(roi_counts(events)), targets[0])
+        torch.save(torch.from_numpy(roi_counts(events, delta_t_us, bins)), targets[0])
         save_file({"events": torch.from_numpy(events.copy())}, str(targets[1]))
         targets[2].write_text(str(r["label"]), encoding="utf-8")
         print(r["trial_id"])

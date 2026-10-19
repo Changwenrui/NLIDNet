@@ -1,0 +1,12 @@
+{
+  "frames": 210,
+  "fps": 10.0,
+  "duration_seconds": 21.0,
+  "width": 960,
+  "height": 680,
+  "source": "flow_2ms_export_ctx64\\00000000",
+  "sample_step": 10,
+  "slowdown": 5.0,
+  "flow_magnitude_scale": 2.385734796524048,
+  "event_log_count_scale": 1.0986123085021973
+}

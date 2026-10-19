@@ -1,4 +1,4 @@
-﻿# Data acquisition
+# Data acquisition
 
 | Component | Model |
 | --- | --- |
@@ -7,6 +7,10 @@
 | Beam splitter | Thorlabs CCM1-BS013M |
 | Robot | Universal Robots UR5e |
 | Gripper | DH-Robotics PGI-140-80-W-S |
+
+![Pouring and reset sequence](../assets/pouring_sequence.png)
+
+![Platform dimensions in millimeters](../assets/platform_dimensions.png)
 
 ## Setup
 
