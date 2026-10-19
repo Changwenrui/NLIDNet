@@ -45,9 +45,9 @@ The UR5e program retains its DH-Robotics URCap source declarations.
 
 The README uses GitHub-hosted copies of the two MP4 demonstrations:
 event_pouring.mp4:
-https://github.com/user-attachments/assets/c12133d8-801f-491e-a1a2-0421f549f4e0
+https://github.com/user-attachments/assets/35b29a13-9c93-4753-ab63-834f00020acd
 event_flow.mp4:
-https://github.com/user-attachments/assets/3ac0531d-4cbe-4bfb-9ef6-c6cb29ca0284
+https://github.com/user-attachments/assets/5f762e43-6d19-4834-ab48-e98113aa0db9
 
 assets/visualizations/temporal_attention.png is rendered from
 source temporal_fusion.npz caches for water trial 00000000 in

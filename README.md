@@ -1,94 +1,114 @@
 # NLIDNet
 
-## Active Hydrodynamic Interrogation Enables Embodied Liquid Sensing
+### Active Hydrodynamic Interrogation Enables Embodied Liquid Sensing
 
 Yuliang Wu†, Wei Zhai†, Wenrui Chang†, Wendi Gan, Chenfeng Wang, Yang Cao, Zheng-Jun Zha
 
-University of Science and Technology of China | † Equal contribution
+University of Science and Technology of China &nbsp; | &nbsp; † Equal contribution
 
-[Videos](#videos) | [Method](#method) | [Visualizations](#reading-the-learned-response) | [Dataset](https://huggingface.co/datasets/GWDx/NLID) | [Hardware](hardware/README.md) | [Code](#code)
+**[Hugging Face Dataset](https://huggingface.co/datasets/GWDx/NLID)** &nbsp; | &nbsp; [Videos](#videos) &nbsp; | &nbsp; [Method](#method) &nbsp; | &nbsp; [Code](#code) &nbsp; | &nbsp; [Hardware](hardware/README.md) &nbsp; | &nbsp; [Citation](#citation)
 
-Transparent liquids may look nearly identical at rest, yet respond differently when accelerated, deformed and poured. We study whether a robot can create an informative sensing signal through its own manipulation action. A repeatable pouring trajectory elicits a transient hydrodynamic response; event-based vision records its evolution; NLIDNet encodes the response into a compact liquid representation.
+**A robot can learn about a liquid by eliciting and observing its motion.** A repeatable pouring action reveals transient differences in jet formation, impact, entrainment and breakup that are difficult to see in static appearance. Event-based vision captures these dynamics, and NLIDNet learns a shared representation for liquid recognition, few-shot adaptation and concentration estimation.
 
-The observation is the liquid's response to a prescribed action: jet formation, impact, entrainment, breakup and surface relaxation. Temporal selection and two complementary visual branches allow the encoder to follow both the morphology and motion of these evolving interfaces. The resulting representation is used for liquid classification, adaptation to previously unseen categories and ethanol concentration regression.
-
-![Active hydrodynamic interrogation and the three stages of pouring](assets/overview.png)
-
-- **Action as measurement.** A standardized robotic pour supplies the stimulus that reveals otherwise weak appearance differences.
-- **Event-based response readout.** Asynchronous brightness changes capture rapidly evolving jets, droplets and liquid interfaces.
-- **Selective temporal encoding.** Six regional signals guide event aggregation and the choice of motion-estimation intervals.
-- **A shared response representation.** Pattern and velocity descriptors form a 256-dimensional embedding for multiple downstream tasks.
+![Active hydrodynamic interrogation: robotic pouring, event-based observation and liquid sensing](assets/overview.png)
 
 ## Videos
 
-### Event response during pouring
+**Event response during pouring.** Opposite event polarities are shown in red and blue. Playback follows the original sampling of the exported event snapshots.
 
-A recorded pouring sequence viewed through the event camera. Red and blue indicate opposite event polarities. The video includes the recording timestamp and uses the original temporal sampling of the exported snapshots.
+https://github.com/user-attachments/assets/35b29a13-9c93-4753-ab63-834f00020acd
 
-https://github.com/user-attachments/assets/c12133d8-801f-491e-a1a2-0421f549f4e0
+**Event counts and optical flow.** Left: event counts. Right: frozen EVFlowNet estimates from the same recording. The three observation stages are played at one-fifth speed. Flow color indicates direction and brightness indicates magnitude, using a shared scale across stages.
 
-### Event counts and estimated optical flow
+https://github.com/user-attachments/assets/5f762e43-6d19-4834-ab48-e98113aa0db9
 
-Paired event counts and frozen EVFlowNet estimates from the same recording, covering all three stages. Playback is five times slower than the recorded process. Flow hue indicates direction and brightness indicates magnitude, with one display scale shared across stages.
-
-https://github.com/user-attachments/assets/3ac0531d-4cbe-4bfb-9ef6-c6cb29ca0284
-
-MP4 copies are retained in [assets/demos](assets/demos/).
-
-## The pouring response
-
-Pouring produces several regimes within one trial. The initial liquid jet forms and strikes the receiving vessel; continued pouring develops entrainment and circulation; the later response includes column breakup, droplets and weak surface motion. These stages provide different views of the same elicited liquid response.
-
-| Observation window | Recording time | Representative dynamics |
-| --- | --- | --- |
-| Stage 1 | 5.90-7.30 s | Jet formation, impact, splashing and wall spreading |
-| Stage 2 | 7.30-8.70 s | Developed impingement, entrainment and mixing |
-| Stage 3 | 8.70-10.10 s | Column breakup, droplet impact and surface relaxation |
-
-Each nominal window contains 700 bins at 2 ms resolution. Temporal views within a trial shift the observation window while retaining the same physical trial identifier.
-
-Event and RGB observations from our NLID acquisition platform illustrate the different appearances of the evolving flow:
-
-![Event and RGB observations of different liquids during pouring](assets/event_rgb_comparison.png)
+[Download MP4 videos](assets/demos/)
 
 ## Method
 
-NLIDNet maps the event stream to a response embedding through temporal attention, attentive event representations and a two-stream encoder.
+NLIDNet follows the liquid response through three complementary mechanisms:
 
-![NLIDNet temporal selection and two-stream response encoder](assets/architecture.png)
+- **Temporal selection.** Six regional event-count signals guide a ConvTran encoder. Attention is normalized within short temporal segments to select informative intervals.
+- **Pattern and velocity encoding.** Attentive polarity maps describe the evolving interfaces; a frozen EVFlowNet and trainable velocity encoder describe their motion. The two branches form a 256-dimensional response embedding.
+- **Representation learning and transfer.** Category supervision, supervised contrastive learning, attention variance regularization and auxiliary physical-attribute supervision shape the embedding. Linear probes or full fine-tuning adapt it to downstream tasks.
 
-### Regional signals and temporal selection
+![NLIDNet: temporal selection, attentive event construction and two-stream response encoding](assets/architecture.png)
 
-The observation region is divided into six fixed ROIs. Counting events in each ROI produces a `6 x 700` signal for a stage window. A ConvTran-based time encoder predicts a score for every fine temporal bin. Gaussian smoothing connects nearby scores before attention is computed.
+The mechanisms are implemented in [time_attention.py](nlidnet/models/time_attention.py), [event_representation.py](nlidnet/models/event_representation.py), [encoders.py](nlidnet/models/encoders.py) and [losses.py](nlidnet/training/losses.py). The complete model is assembled in [network.py](nlidnet/models/network.py).
 
-The window is divided into 20 segments, each containing 35 fine bins. Attention is normalized within each segment:
+## Dataset
 
-$$
-\alpha_{m,j}=\operatorname{softmax}_{j}(s_{m,j}),
-\qquad
-j_m^{*}=\arg\max_j\alpha_{m,j}.
-$$
+**[Access the NLID dataset on Hugging Face →](https://huggingface.co/datasets/GWDx/NLID)**
 
-Local weights guide event-map construction. Selected bins identify adjacent intervals for optical-flow estimation. A second set of weights, obtained from segment scores, controls velocity-feature aggregation. The implementation is in [time_attention.py](nlidnet/models/time_attention.py).
+This work builds on our [NLID project](https://github.com/wyl-OvO/NLID), sharing its robotic pouring platform and event/RGB recordings. The experiments study the following tasks:
 
-### Attentive pattern and velocity encoding
+| Task | Protocol |
+| --- | --- |
+| Liquid recognition | 16 base liquid categories |
+| Few-shot recognition | Nine categories excluded from source-task training |
+| Concentration estimation | Water and ten ethanol concentrations, 0-100% in 10% increments |
 
-The **pattern branch** accumulates positive and negative events using the learned local weights, yielding 20 polarity feature maps. A convolutional downsampler and ResNet34 encode their spatial structure. Segment features are averaged to summarize flow morphology.
+Each trial contains three 1.4 s observation windows, beginning at 5.90, 7.30 and 8.70 s, with 2 ms event bins. Predictions and few-shot support counts are defined by independent physical trials. Temporal views of a recording retain the same trial identifier.
 
-The **velocity branch** constructs four-channel inputs containing polarity counts and normalized event timestamps. Two adjacent inputs are selected for each segment. A frozen EVFlowNet estimates motion, a trainable convolutional encoder extracts velocity descriptors, and segment attention combines them over time.
+Label mappings and manifest examples are provided in [data/](data/). The [data tools](nlidnet/data/) cover RAW decoding, six-ROI signals, trial indexing, polarity frames, time surfaces, voxel grids and validation. See the [data preparation workflow](docs/usage.md#installation-and-data-preparation) for conversion and indexing commands.
 
-Pattern and velocity descriptors are concatenated and projected into a 256-dimensional response embedding. Classification and physical-attribute heads operate on this shared representation. See [event_representation.py](nlidnet/models/event_representation.py), [encoders.py](nlidnet/models/encoders.py) and the assembled [network.py](nlidnet/models/network.py).
+## Acquisition platform
 
-### Representation learning and adaptation
+A UR5e robot executes a prescribed pouring trajectory. A beam splitter aligns a Prophesee EVK4 event camera and an iRayple RGB camera to observe the same scene.
 
-Source training combines category supervision, supervised contrastive learning, attention variance regularization and auxiliary physical-attribute supervision:
+![Robotic pouring platform with aligned event and RGB observations](assets/acquisition_platform.png)
 
-$$
-\mathcal{L}=\mathcal{L}_{\mathrm{cls}}
-+\lambda_{\mathrm{con}}\mathcal{L}_{\mathrm{con}}
-+\lambda_{\mathrm{var}}\mathcal{L}_{\mathrm{var}}
-+\lambda_{\mathrm{phys}}\mathcal{L}_{\mathrm{phys}}.
-$$
+Camera interfaces, acquisition scripts, platform dimensions and the robot program are available in [hardware](hardware/README.md).
 
-The auxiliary targets are standardized reference values of density, viscosity and surface tension for the base categories. Downstream heads adapt the embedding to novel-category recognition or concentration regression. The encoder can remain frozen for a linear probe or be updated through full fine-tuning. The training objective is implemented in [losses.py](nlidnet/training/losses.py).
+## Code
 
+The `nlidnet` command connects data preparation, training, adaptation and analysis. Implementation modules are organized by function:
+
+```text
+NLIDNet/
+  nlidnet/
+    commands/        Command-line workflows
+    models/          Time attention, event construction and two-stream encoders
+    data/            RAW decoding, trial indexing and representations
+    training/        Objectives, source training and adaptation
+    analysis/        Correlation, statistics, embeddings and timing
+    visualization/   Attention, Grad-CAM, galleries and video export
+  configs/           Paper configuration
+  docs/              Installation and workflow reference
+  data/              Manifest examples, labels and reference annotations
+  hardware/          Camera interfaces and robot program
+  assets/            Article figures and demonstration videos
+  tests/             Functional checks
+```
+
+| Workflow | Command | Implementation |
+| --- | --- | --- |
+| RAW processing and indexing | `nlidnet data` | [data commands](nlidnet/commands/prepare_data.py) |
+| Source training | `nlidnet train` | [training](nlidnet/training/train.py) |
+| Trial-level evaluation | `nlidnet evaluate` | [evaluation](nlidnet/training/evaluate.py) |
+| Few-shot classification and concentration regression | `nlidnet adapt` | [adaptation](nlidnet/training/adapt.py), [cached probes](nlidnet/training/probes.py) |
+| Event, video, temporal and RGB controls | `nlidnet baselines` | [baseline models](nlidnet/models/baselines/) |
+| Architecture and loss ablations | `nlidnet ablations` | [ablation models](nlidnet/models/ablations.py) |
+| Representation analysis | `nlidnet analyze` | [analysis](nlidnet/analysis/) |
+| Figures and video export | `nlidnet visualize` | [visualization](nlidnet/visualization/) |
+
+`python -m nlidnet` provides the same interface. Run `nlidnet --help` or add `--help` after a command to inspect its options.
+
+[Installation, data preparation and experiment commands](docs/usage.md)
+
+## Citation
+
+```bibtex
+@misc{wu_nlidnet,
+  title  = {Active Hydrodynamic Interrogation Enables Embodied Liquid Sensing},
+  author = {Wu, Yuliang and Zhai, Wei and Chang, Wenrui and Gan, Wendi and Wang, Chenfeng and Cao, Yang and Zha, Zheng-Jun},
+  url    = {https://github.com/Changwenrui/NLIDNet},
+  note   = {Manuscript}
+}
+```
+
+## Acknowledgements
+
+This work extends our [NLID project](https://github.com/wyl-OvO/NLID), sharing the pouring platform, recordings and event/RGB visualizations. We thank the authors of ConvTran, EVFlowNet, InceptionTime, VideoMAE and SpikingResformer. Source attribution is provided in [NOTICE](NOTICE).
+
+Released under the [MIT License](LICENSE).

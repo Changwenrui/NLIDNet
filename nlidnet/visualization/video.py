@@ -98,17 +98,6 @@ def _including_first(first, remaining):
     yield from remaining
 
 
-def font(size):
-    from PIL import ImageFont
-
-    for name in ("DejaVuSans.ttf", "C:/Windows/Fonts/arial.ttf"):
-        try:
-            return ImageFont.truetype(name, size)
-        except OSError:
-            pass
-    return ImageFont.load_default()
-
-
 def frame_number(path):
     numbers = re.findall(r"\d+", path.stem)
     if not numbers:
@@ -117,7 +106,7 @@ def frame_number(path):
 
 
 def frames_video(source, output, fps=50, delta_t_us=2000, crop=None, accumulate=1):
-    from PIL import Image, ImageChops, ImageDraw
+    from PIL import Image, ImageChops
 
     if accumulate < 1 or delta_t_us < 1:
         raise ValueError("accumulate and delta_t_us must be positive")
@@ -139,23 +128,9 @@ def frames_video(source, output, fps=50, delta_t_us=2000, crop=None, accumulate=
                 frame = ImageChops.darker(frame, Image.open(path).convert("RGB"))
             if crop is not None:
                 frame = frame.crop(tuple(crop))
-            frame.thumbnail((520, 580))
-            canvas = Image.new("RGB", (640, 700), "white")
-            draw = ImageDraw.Draw(canvas)
-            draw.text(
-                (32, 18), "Event response during pouring", fill="#252a30", font=font(24)
-            )
-            time = indices[start] * delta_t_us / 1e6
-            draw.text(
-                (32, 54), f"Recording time: {time:.3f} s", fill="#5b6670", font=font(18)
-            )
-            canvas.paste(frame, ((640 - frame.width) // 2, 94))
-            draw.text(
-                (32, 651),
-                "Red: positive events   Blue: negative events",
-                fill="#5b6670",
-                font=font(17),
-            )
+            size = (frame.width + frame.width % 2, frame.height + frame.height % 2)
+            canvas = Image.new("RGB", size, "white")
+            canvas.paste(frame, (0, 0))
             yield canvas
 
     metadata = write_mp4(generate(), output, fps)
@@ -167,6 +142,8 @@ def frames_video(source, output, fps=50, delta_t_us=2000, crop=None, accumulate=
             "delta_t_us": delta_t_us,
             "sampling_interval_us": step_us,
             "accumulated_snapshots_per_frame": accumulate,
+            "crop": list(crop) if crop is not None else None,
+            "overlays": False,
         }
     )
     Path(output).with_suffix(".json").write_text(
@@ -176,7 +153,7 @@ def frames_video(source, output, fps=50, delta_t_us=2000, crop=None, accumulate=
 
 
 def flow_cache_video(source, output, sample_step=10, slowdown=5, gif=None):
-    from PIL import Image, ImageDraw
+    from PIL import Image
     from matplotlib.colors import hsv_to_rgb
 
     if sample_step < 1 or slowdown <= 0:
@@ -208,9 +185,7 @@ def flow_cache_video(source, output, sample_step=10, slowdown=5, gif=None):
     gif_frames = []
 
     def generate():
-        for fallback_number, (meta, counts, flow) in enumerate(stages, 1):
-            match = re.search(r"stage(\d+)", meta.get("stage", ""))
-            stage_number = int(match.group(1)) if match else fallback_number
+        for meta, counts, flow in stages:
             for index in range(0, len(counts), sample_step):
                 field = np.asarray(flow[index], dtype=np.float32)
                 magnitude = np.hypot(field[0], field[1])
@@ -232,37 +207,12 @@ def flow_cache_video(source, output, sample_step=10, slowdown=5, gif=None):
                 event_rgb = np.repeat(
                     (intensity * 255).astype(np.uint8)[..., None], 3, axis=-1
                 )
-                canvas = Image.new("RGB", (960, 680), "white")
-                draw = ImageDraw.Draw(canvas)
-                draw.text(
-                    (34, 18),
-                    "Event response and estimated optical flow",
-                    fill="#252a30",
-                    font=font(26),
+                height, width = event_rgb.shape[:2]
+                canvas = Image.new(
+                    "RGB", (width * 2 + 16, height + height % 2), "white"
                 )
-                time = (
-                    meta["start_sec_relative_to_recording_t0"] + index * delta_ms / 1000
-                )
-                draw.text(
-                    (34, 55),
-                    f"Stage {stage_number}  |  Recording time {time:.3f} s  |  {slowdown:g}x slower playback",
-                    fill="#5b6670",
-                    font=font(18),
-                )
-                for x, array, title in (
-                    (100, event_rgb, "Event count"),
-                    (540, flow_rgb, "Frozen EVFlowNet"),
-                ):
-                    image = Image.fromarray(array)
-                    image.thumbnail((320, 480))
-                    canvas.paste(image, (x, 130))
-                    draw.text((x, 99), title, fill="#252a30", font=font(21))
-                draw.text(
-                    (34, 633),
-                    "Flow hue: direction   |   Brightness: magnitude   |   Shared scale across stages",
-                    fill="#5b6670",
-                    font=font(17),
-                )
+                canvas.paste(Image.fromarray(event_rgb), (0, 0))
+                canvas.paste(Image.fromarray(flow_rgb), (width + 16, 0))
                 if gif is not None and (index // sample_step) % 3 == 0:
                     thumb = canvas.copy()
                     thumb.thumbnail((640, 454))
@@ -279,6 +229,8 @@ def flow_cache_video(source, output, sample_step=10, slowdown=5, gif=None):
             "slowdown": slowdown,
             "flow_magnitude_scale": magnitude_scale,
             "event_log_count_scale": event_scale,
+            "panels": ["event_count", "optical_flow"],
+            "overlays": False,
         }
     )
     Path(output).with_suffix(".json").write_text(

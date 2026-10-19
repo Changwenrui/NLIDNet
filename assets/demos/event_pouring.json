@@ -1,13 +1,20 @@
 {
   "frames": 350,
-  "fps": 50.0,
+  "fps": 50,
   "duration_seconds": 7.0,
-  "width": 640,
-  "height": 700,
+  "width": 380,
+  "height": 600,
   "source": "event_frames",
   "first_bin": 2500,
   "last_bin": 5990,
   "delta_t_us": 2000,
   "sampling_interval_us": 20000,
-  "accumulated_snapshots_per_frame": 1
+  "accumulated_snapshots_per_frame": 1,
+  "crop": [
+    500,
+    0,
+    880,
+    600
+  ],
+  "overlays": false
 }
