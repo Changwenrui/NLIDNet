@@ -11,6 +11,6 @@ jobs:
       - run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -e .
       - run: python -m unittest discover -s tests -v
-      - run: python train.py --stage stage1 --dry-run
-      - run: python prepare_data.py --help
-      - run: python visualize.py --help
+      - run: python -m nlidnet train --stage stage1 --dry-run
+      - run: python -m nlidnet data --help
+      - run: python -m nlidnet visualize --help

@@ -76,6 +76,20 @@ def main(argv=None):
     flow_video.add_argument("--sample-step", type=int, default=10)
     flow_video.add_argument("--slowdown", type=float, default=5)
     flow_video.add_argument("--gif")
+    gallery = commands.add_parser(
+        "gallery",
+        help="Render overview figures from temporal, Grad-CAM or feature caches",
+    )
+    gallery.add_argument(
+        "--kind", choices=["temporal", "gradcam", "embeddings"], required=True
+    )
+    gallery.add_argument("--caches", nargs="+", required=True)
+    gallery.add_argument("--output", required=True)
+    gallery.add_argument("--method", choices=["pca", "tsne"], default="tsne")
+    gallery.add_argument("--seed", type=int, default=42)
+    gallery.add_argument("--frame-indices", nargs="+", type=int, default=[2, 7, 12, 17])
+    gallery.add_argument("--segments", type=int, default=20)
+    gallery.add_argument("--delta-t-us", type=int, default=2000)
     for command in (attention, features, temporal, gradcam):
         command.add_argument("--config", default="configs/paper.yaml")
         command.add_argument("--stage", choices=["stage1", "stage2", "stage3"])
@@ -83,6 +97,22 @@ def main(argv=None):
         command.add_argument("--checkpoint", required=True)
         command.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "gallery":
+        from nlidnet.visualization.gallery import (
+            temporal_gallery,
+            gradcam_gallery,
+            embedding_gallery,
+        )
+
+        if args.kind == "temporal":
+            return temporal_gallery(
+                args.caches, args.output, args.segments, args.delta_t_us
+            )
+        if args.kind == "gradcam":
+            return gradcam_gallery(args.caches, args.output, args.frame_indices)
+        if len(args.caches) != 1:
+            parser.error("Embedding gallery expects one feature file")
+        return embedding_gallery(args.caches[0], args.output, args.method, args.seed)
     if args.command == "video":
         from nlidnet.visualization.video import frames_video
 

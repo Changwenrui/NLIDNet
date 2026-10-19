@@ -23,13 +23,10 @@ assets/event_rgb_comparison.png: NLID/image/Readme/1750405785274.png.
 assets/pouring_sequence.png: NLID/image/Readme/1750408970516.png.
 assets/platform_dimensions.png: NLID/image/Readme/1750408564541.png.
 assets/event_representations.png: NLID/image/Readme/1750831165216.png.
-assets/event_pouring.gif: local event_frames/frame_02500.png through
-frame_05990.png, cropped to the pouring region; each displayed frame
-accumulates five exported event frames over 100 ms of recording time.
-
-assets/demos/event_pouring.mp4: the same local event snapshots, rendered
+assets/demos/event_pouring.mp4: local event_frames/frame_02500.png through
+frame_05990.png, cropped to the pouring region and rendered
 at 50 frames/s with one 2 ms snapshot every 20 ms of recording time.
-assets/demos/event_flow.mp4 and assets/event_flow.gif: paired event_count.npy
+assets/demos/event_flow.mp4: paired event_count.npy
 and flow_uv.npy from flow_2ms_export_ctx64/00000000 across all three stages.
 The cache uses a 64-pixel real-event context for optical-flow inference,
 then crops back to the 320 x 480 target region. The videos use a shared
@@ -45,3 +42,21 @@ rgb_resnet34_firstframe_diagnostics.py. Grad-CAM export and event overlays
 follow export_gradcam_offline_cache_all.py and prepare_gradcam_data.py.
 
 The UR5e program retains its DH-Robotics URCap source declarations.
+
+The README uses GitHub-hosted copies of the two MP4 demonstrations:
+event_pouring.mp4:
+https://github.com/user-attachments/assets/c12133d8-801f-491e-a1a2-0421f549f4e0
+event_flow.mp4:
+https://github.com/user-attachments/assets/3ac0531d-4cbe-4bfb-9ef6-c6cb29ca0284
+
+assets/visualizations/temporal_attention.png is rendered from
+source temporal_fusion.npz caches for water trial 00000000 in
+all three stages of gradcam_offline_cache. Local softmax consistency
+is checked before rendering.
+assets/visualizations/spatial_gradcam.png is rendered from
+main-model layer1 caches in gradcam_clean_data_layer1/stage2_3650,
+water 00000000 and DMSO 00000060. Maps are recomputed from the saved
+activations and gradients; display normalization is per frame.
+assets/visualizations/liquid_embeddings.png is rendered from
+embedding_vis_stage1_phys_supcon/main16_plus_fewshot9_test_features.csv
+using standardized features and t-SNE (perplexity 30, seed 42).
