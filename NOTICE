@@ -1,0 +1,24 @@
+NLIDNet
+
+This project is distributed under the MIT License. See LICENSE.
+
+The temporal encoder uses ConvTran-based positional and relative attention.
+The optical-flow front-end uses EVFlowNet. Comparison architectures include
+VideoMAE and SpikingResformer. External packages and camera SDKs retain their
+respective licenses and terms.
+
+The positional-encoding implementation in nlidnet/models/baselines/videomae.py
+references:
+https://github.com/jadore801120/attention-is-all-you-need-pytorch/blob/master/transformer/Models.py#L31
+
+Acquisition software, the liquid-property reference table and platform figures
+are shared with NLID:
+https://github.com/wyl-OvO/NLID
+
+Figure sources:
+assets/architecture.png: Figure 2 of the NLIDNet manuscript.
+assets/acquisition_platform.png: NLID/image/Readme/1750775356233.png.
+assets/legacy_overview.png: NLID/image/Readme/1750346547321.png.
+assets/legacy_event_representations.png: NLID/image/Readme/1750831165216.png.
+
+The UR5e program retains its DH-Robotics URCap source declarations.

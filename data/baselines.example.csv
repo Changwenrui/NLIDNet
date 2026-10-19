@@ -1,0 +1,3 @@
+trial_id,split,label,prefix,representation_path,video_path
+water_trial_001,train,0,00000000,stage1/train/00000000.npy,water/rgb1.avi
+water_trial_002,test,0,00000001,stage1/test/00000001.npy,water/rgb2.avi

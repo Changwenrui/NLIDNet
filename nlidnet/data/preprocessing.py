@@ -1,0 +1,70 @@
+from pathlib import Path
+import numpy as np
+from nlidnet.protocol import ROI_BOXES, read_manifest
+
+
+def roi_counts(events, delta_t_us=2000, bins=9000):
+    if delta_t_us <= 0 or bins <= 0:
+        raise ValueError("delta_t_us and bins must be positive")
+    events = np.asarray(events)
+    if events.ndim != 2 or events.shape[1] != 4:
+        raise ValueError("Expected [N,4] x,y,t,p events")
+    out = np.zeros((6, bins), dtype=np.float32)
+    if not len(events):
+        return out
+    t = ((events[:, 2] - events[0, 2]) // delta_t_us).astype(np.int64)
+    for i, (x0, y0, x1, y1) in enumerate(ROI_BOXES):
+        keep = (
+            (events[:, 0] >= x0)
+            & (events[:, 0] < x1)
+            & (events[:, 1] >= y0)
+            & (events[:, 1] < y1)
+            & (t >= 0)
+            & (t < bins)
+        )
+        out[i] = np.bincount(t[keep], minlength=bins)
+    return out
+
+
+def read_raw(path):
+    from metavision_core.event_io import EventsIterator
+
+    chunks = []
+    for ev in EventsIterator(input_path=str(path), delta_t=1000000):
+        if len(ev):
+            chunks.append(
+                np.column_stack([ev["x"], ev["y"], ev["t"], ev["p"]]).astype(np.int64)
+            )
+    if not chunks:
+        raise ValueError(f"Empty recording: {path}")
+    result = np.concatenate(chunks)
+    if np.any(np.diff(result[:, 2]) < 0):
+        raise ValueError(f"Unsorted event timestamps: {path}")
+    return result
+
+
+def preprocess(manifest, raw_root, output):
+    import torch
+    from safetensors.torch import save_file
+
+    records = read_manifest(manifest)
+    raw_paths = []
+    for r in records:
+        if not r.get("raw_path"):
+            raise ValueError("Preprocessing requires a raw_path column")
+        raw_paths.append((Path(raw_root) / r["raw_path"]).resolve())
+    if len(raw_paths) != len(set(raw_paths)):
+        raise ValueError(
+            "The same RAW recording appears more than once in the manifest"
+        )
+    for r, raw in zip(records, raw_paths):
+        dest = Path(output) / r["split"] / r["prefix"]
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        targets = [Path(str(dest) + ext) for ext in [".pt", ".safetensors", ".txt"]]
+        if any(p.exists() for p in targets):
+            raise FileExistsError(f"Refusing to overwrite prepared trial: {dest}")
+        events = read_raw(raw)
+        torch.save(torch.from_numpy(roi_counts(events)), targets[0])
+        save_file({"events": torch.from_numpy(events.copy())}, str(targets[1]))
+        targets[2].write_text(str(r["label"]), encoding="utf-8")
+        print(r["trial_id"])

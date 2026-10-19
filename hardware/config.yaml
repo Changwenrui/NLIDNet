@@ -1,0 +1,9 @@
+robot_ip: 192.168.0.11
+listen_port: 5000
+event_query_interval_s: 0.01
+event_roi_xywh: [410, 0, 500, 600]
+bias_diff_on: 20
+bias_diff_off: 20
+rgb_exposure_us: 25000
+rgb_sensor_size: [1280, 1024]
+rgb_roi_xywh: [264, 0, 600, 600]

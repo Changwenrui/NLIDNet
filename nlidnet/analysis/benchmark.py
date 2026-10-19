@@ -1,0 +1,79 @@
+from contextlib import nullcontext
+from pathlib import Path
+from time import perf_counter
+import csv
+import numpy as np
+import torch
+from torch.utils.data import DataLoader
+from nlidnet.data.dataset import LiquidEventDataset, collate_trials
+from nlidnet.utils import build_model, move_inputs, save_json
+
+
+def benchmark(
+    cfg, checkpoint, output, batches=50, warmup=5, batch_size=1, precision="float32"
+):
+    if batches < 1 or warmup < 0 or batch_size < 1:
+        raise ValueError("Invalid benchmark budget")
+    device = torch.device(cfg["device"])
+    model = build_model(cfg, checkpoint).to(device).eval()
+    data = LiquidEventDataset(cfg, "test", offset=0)
+    loader = DataLoader(
+        data,
+        batch_size=batch_size,
+        num_workers=cfg["workers"],
+        collate_fn=collate_trials,
+    )
+    iterator = iter(loader)
+    rows = []
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(device)
+    with torch.inference_mode():
+        for step in range(warmup + batches):
+            try:
+                batch = next(iterator)
+            except StopIteration:
+                iterator = iter(loader)
+                batch = next(iterator)
+            inputs = move_inputs(batch, device)
+            context = (
+                torch.autocast(device_type="cuda", dtype=torch.bfloat16)
+                if device.type == "cuda" and precision == "bfloat16"
+                else nullcontext()
+            )
+            if device.type == "cuda":
+                torch.cuda.synchronize(device)
+            start = perf_counter()
+            with context:
+                model(*inputs)
+            if device.type == "cuda":
+                torch.cuda.synchronize(device)
+            elapsed = (perf_counter() - start) * 1000
+            if step >= warmup:
+                rows.append(
+                    {
+                        "batch": step - warmup,
+                        "views": len(batch["trial_ids"]),
+                        "milliseconds": elapsed,
+                    }
+                )
+    times = np.asarray([r["milliseconds"] for r in rows])
+    views = sum(r["views"] for r in rows)
+    result = {
+        "device": str(device),
+        "precision": precision,
+        "batches": batches,
+        "mean_batch_ms": float(times.mean()),
+        "median_batch_ms": float(np.median(times)),
+        "mean_view_ms": float(times.sum() / views),
+        "views_per_second": float(views / (times.sum() / 1000)),
+    }
+    if device.type == "cuda":
+        result["peak_memory_mib"] = torch.cuda.max_memory_allocated(device) / 2**20
+    out = Path(output)
+    out.mkdir(parents=True, exist_ok=True)
+    save_json(out / "timing.json", result)
+    with (out / "batches.csv").open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+    return result

@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "Please cite the NLIDNet manuscript if you use this code."
+title: "Active Hydrodynamic Interrogation Enables Embodied Liquid Sensing"
+type: software
+url: "https://github.com/Changwenrui/NLIDNet"
+license: MIT
+authors:
+  - family-names: Wu
+    given-names: Yuliang
+  - family-names: Zhai
+    given-names: Wei
+  - family-names: Chang
+    given-names: Wenrui
+  - family-names: Gan
+    given-names: Wendi
+  - family-names: Wang
+    given-names: Chenfeng
+  - family-names: Cao
+    given-names: Yang
+  - family-names: Zha
+    given-names: Zheng-Jun
