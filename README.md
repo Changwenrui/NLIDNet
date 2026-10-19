@@ -6,23 +6,19 @@ Yuliang Wu†, Wei Zhai†, Wenrui Chang†, Wendi Gan, Chenfeng Wang, Yang Cao,
 
 University of Science and Technology of China &nbsp; | &nbsp; † Equal contribution
 
-**[Hugging Face Dataset](https://huggingface.co/datasets/GWDx/NLID)** &nbsp; | &nbsp; [Videos](#videos) &nbsp; | &nbsp; [Method](#method) &nbsp; | &nbsp; [Code](#code) &nbsp; | &nbsp; [Hardware](hardware/README.md) &nbsp; | &nbsp; [Citation](#citation)
+**[Hugging Face Dataset](https://huggingface.co/datasets/GWDx/NLID)** &nbsp; | &nbsp; [Video](#video) &nbsp; | &nbsp; [Method](#method) &nbsp; | &nbsp; [Code](#code) &nbsp; | &nbsp; [Hardware](hardware/README.md) &nbsp; | &nbsp; [Citation](#citation)
 
 **A robot can learn about a liquid by eliciting and observing its motion.** A repeatable pouring action reveals transient differences in jet formation, impact, entrainment and breakup that are difficult to see in static appearance. Event-based vision captures these dynamics, and NLIDNet learns a shared representation for liquid recognition, few-shot adaptation and concentration estimation.
 
 ![Active hydrodynamic interrogation: robotic pouring, event-based observation and liquid sensing](assets/overview.png)
 
-## Videos
+## Video
 
 **Event response during pouring.** Opposite event polarities are shown in red and blue. Playback follows the original sampling of the exported event snapshots.
 
 https://github.com/user-attachments/assets/35b29a13-9c93-4753-ab63-834f00020acd
 
-**Event counts and optical flow.** Left: event counts. Right: frozen EVFlowNet estimates from the same recording. The three observation stages are played at one-fifth speed. Flow color indicates direction and brightness indicates magnitude, using a shared scale across stages.
-
-https://github.com/user-attachments/assets/5f762e43-6d19-4834-ab48-e98113aa0db9
-
-[Download MP4 videos](assets/demos/)
+[Download MP4](assets/demos/event_pouring.mp4)
 
 ## Method
 
@@ -49,6 +45,15 @@ This work builds on our [NLID project](https://github.com/wyl-OvO/NLID), sharing
 | Concentration estimation | Water and ten ethanol concentrations, 0-100% in 10% increments |
 
 Each trial contains three 1.4 s observation windows, beginning at 5.90, 7.30 and 8.70 s, with 2 ms event bins. Predictions and few-shot support counts are defined by independent physical trials. Temporal views of a recording retain the same trial identifier.
+
+<details>
+<summary>Event and RGB observations of four liquids</summary>
+
+Recorded pouring sequences from NLID: water, 30% glycerol, ethanol and DMSO. Event and RGB rows show the evolving liquid response at successive times.
+
+![Event and RGB pouring observations for water, glycerol, ethanol and DMSO](assets/event_rgb_comparison.png)
+
+</details>
 
 Label mappings and manifest examples are provided in [data/](data/). The [data tools](nlidnet/data/) cover RAW decoding, six-ROI signals, trial indexing, polarity frames, time surfaces, voxel grids and validation. See the [data preparation workflow](docs/usage.md#installation-and-data-preparation) for conversion and indexing commands.
 

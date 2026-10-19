@@ -26,12 +26,6 @@ assets/event_representations.png: NLID/image/Readme/1750831165216.png.
 assets/demos/event_pouring.mp4: local event_frames/frame_02500.png through
 frame_05990.png, cropped to the pouring region and rendered
 at 50 frames/s with one 2 ms snapshot every 20 ms of recording time.
-assets/demos/event_flow.mp4: paired event_count.npy
-and flow_uv.npy from flow_2ms_export_ctx64/00000000 across all three stages.
-The cache uses a 64-pixel real-event context for optical-flow inference,
-then crops back to the 320 x 480 target region. The videos use a shared
-color scale across stages and 5x slower playback. These are visualization
-examples of cached solver responses.
 
 The spatial-compression baselines in nlidnet/models/baselines/temporal.py
 adapt the ConvTran and InceptionTime implementations from NLID.
@@ -43,12 +37,9 @@ follow export_gradcam_offline_cache_all.py and prepare_gradcam_data.py.
 
 The UR5e program retains its DH-Robotics URCap source declarations.
 
-The README uses GitHub-hosted copies of the two MP4 demonstrations:
+The README uses a GitHub-hosted copy of the event-pouring demonstration:
 event_pouring.mp4:
 https://github.com/user-attachments/assets/35b29a13-9c93-4753-ab63-834f00020acd
-event_flow.mp4:
-https://github.com/user-attachments/assets/5f762e43-6d19-4834-ab48-e98113aa0db9
-
 assets/visualizations/temporal_attention.png is rendered from
 source temporal_fusion.npz caches for water trial 00000000 in
 all three stages of gradcam_offline_cache. Local softmax consistency
