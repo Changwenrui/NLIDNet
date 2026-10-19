@@ -8,7 +8,7 @@ University of Science and Technology of China &nbsp; | &nbsp; † Equal contribu
 
 **[Hugging Face Dataset](https://huggingface.co/datasets/GWDx/NLID)** &nbsp; | &nbsp; [Video](#video) &nbsp; | &nbsp; [Method](#method) &nbsp; | &nbsp; [Code](#code) &nbsp; | &nbsp; [Hardware](hardware/README.md) &nbsp; | &nbsp; [Citation](#citation)
 
-**A prescribed robotic pouring action elicits the transient response used for liquid sensing.** Event-based vision records the non-equilibrium evolution of the jet, impact region and free surface. NLIDNet selects informative intervals and encodes the response into a protocol-conditioned representation for liquid recognition, few-shot adaptation and ethanol concentration regression.
+A prescribed robotic pouring action elicits the transient response used for liquid sensing.Event-based vision records the non-equilibrium evolution of the jet, impact region and free surface. NLIDNet selects informative intervals and encodes the response into a protocol-conditioned representation for liquid recognition, few-shot adaptation and ethanol concentration regression.
 
 ![Active hydrodynamic interrogation: robotic pouring, event-based observation and liquid sensing](assets/overview.png)
 
